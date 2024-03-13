@@ -17,7 +17,7 @@ const int LHALL = 2, RHALL = 3;
 
 //global variables
 //speed is 100% of max power you want the motors to operate at
-const int speed = 52;
+const int speed = 50;
 //distance in cm the robot stops before an obstical
 const int stopDist = 20;
 //variable for telling the robot what signal will be the line, can change depending on the tape and background colours

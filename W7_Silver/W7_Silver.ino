@@ -1,4 +1,4 @@
-//initialising file, this will be used for creating the Silver challenge, requiring all bronze elements plus 2 types of PID control
+//silver challenge code, using PID_Control_Test until PID basics are functional
 
 void setup() {
   // put your setup code here, to run once:
