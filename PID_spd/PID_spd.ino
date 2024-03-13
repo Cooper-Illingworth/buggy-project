@@ -116,9 +116,11 @@ void loop() {
       //stop for when an object is detected
       objDetect = true;
       stop();
+      //stop counter for the Integral to prevent total error issues?
     }
   } else {
     stop();
+    //stop counter for the Integral to prevent total error issues?
   }
 }
 
