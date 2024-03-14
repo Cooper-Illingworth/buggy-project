@@ -8,7 +8,6 @@ char pass[] = "test1234";
 WiFiServer server(5200);
 
 //pin initialisation
-//pin initialisation
 //motor pins
 const int RFpin = 5, RBpin = 6, LFpin = 10, LBpin = 11;
 //IR sensor pins
@@ -30,7 +29,7 @@ const int hallc = 8;       //amount of state changes per encoder rotation
 //PID setpoint
 int setpoint = 30;  //starting velocity
 //PID gains
-const float kp = .01, ki = .0005, kd = .001;
+const float kp = .01, ki = .0005, kd = .001; //UNSURE!!! do we need to get new variables and retune for following PID
 
 //initialising other global variables, reccomend do not change
 float velocity;
@@ -92,16 +91,18 @@ void loop() {
 
   wifiPoll();
 
+  //general calculations for traveldistance and velocity used for PID and reporting
   travelDist = ((lencoder + rencoder) / (float)(2 * hallc)) * (wheeld * 3.1415);
   velocity = (travelDist - travelDistP) / (float)(PIDte / 1000.0);
   //Serial.println(velocity);
   //Serial.println(travelDist - travelDistP);
   travelDistP = travelDist;
 
+  //general run loop handling movement, distance polling, and line detection
   if (run) {
-    PWM = PIDspd(velocity);
     distPoll();
     if (distance > stopDist && distance != 0) {
+      PWM = PIDspd(velocity);
       objDetect = false;
       if (digitalRead(LEYE) != line && digitalRead(REYE) != line) {
         forward();
@@ -117,25 +118,16 @@ void loop() {
       objDetect = true;
       stop();
       //stop counter for the Integral to prevent total error issues?
+      PIDtp = millis();
     }
   } else {
     stop();
     //stop counter for the Integral to prevent total error issues?
+    PIDtp = millis();
   }
 }
 
-void distPoll() {
-  //function for polling distance using the ultrasonic sensor
-  digitalWrite(trig, LOW);
-  delayMicroseconds(2);
-  digitalWrite(trig, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(trig, LOW);
-
-  //takes the pulse return time and converts to a distance in cm
-  duration = pulseIn(echo, HIGH, 200000);  //timeout delay in microseconds
-  distance = duration / 58;
-}
+//PID for speed control
 int PIDspd(int input) {
   //setsup current and elapsed time
   PIDtc = millis();
@@ -156,6 +148,7 @@ int PIDspd(int input) {
   return output;
 }
 
+//general wifi function for sending and recieving data
 void wifiPoll() {
   //wifi polling, reconnecting, and notification on first connect
   WiFiClient client = server.available();
@@ -165,15 +158,12 @@ void wifiPoll() {
     firstConnect = false;
   }
 
-
   //reads for start 'x' and stop 'y' signals wirelessly
-  // uses bool variables to have a constant on or off signal
-
+  //uses bool variables to have a constant on or off signal
   if (client.available()) {
     reader = client.read();  //PROBLEM LINE
     //Serial.println(reader);
   }
-
   if (reader == 'x') {
     run = true;
   } else if (reader == 'y') {
@@ -186,7 +176,6 @@ void wifiPoll() {
   repTime1c = millis();
   if (repTime1c - repTime1p > 5000) {
 
-
     report = String(travelDist) + " cm traveled. ";
     client.write(report.c_str());
     if (objDetect) client.write("object detected!");
@@ -194,7 +183,18 @@ void wifiPoll() {
     repTime1p = millis();
   }
 }
+//function for polling distance using the ultrasonic sensor
+void distPoll() {
+  digitalWrite(trig, LOW);
+  delayMicroseconds(2);
+  digitalWrite(trig, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trig, LOW);
 
+  //takes the pulse return time and converts to a distance in cm
+  duration = pulseIn(echo, HIGH, 200000);  //timeout delay in microseconds
+  distance = duration / 58;
+}
 
 //wheel encoder interrupt functions for tracking wheel revolutions
 void lrev() {
@@ -204,6 +204,7 @@ void rrev() {
   rencoder++;
 }
 
+//movement functions to be called in main code to reduce the length of loop()
 void forward() {
   //moves the buggy forward
   analogWrite(RFpin, PWM);
