@@ -1,3 +1,12 @@
+//TODO:
+/*
+silver challenge reporting:
+report distance to object
+speed of buggy
+PID contorl mode
+and also the reference speed for some reason?
+*/
+
 #include <WiFiS3.h>
 
 //wifi name and password
@@ -89,12 +98,12 @@ void loop() {
   //calls WiFi events
   wifiPoll();
 
+  //keep here or  move to seperate function?
   //general calculations for traveldistance and velocity used for PID and reporting
   travelDist = ((lencoder + rencoder) / (float)(2 * hallc)) * (wheeld * 3.1415);
   velocity = (travelDist - travelDistP) / (float)(PIDte / 1000.0);
-  //Serial.println(velocity);
-  //Serial.println(travelDist - travelDistP);
   travelDistP = travelDist;
+  //Serial.println(velocity); //DEBUG
 
   //general run loop handling movement, distance polling, and line detection
   if (run) {
@@ -102,8 +111,16 @@ void loop() {
     //events for when run is true
     distPoll();
     if (distance > stopDist && distance != 0) {
-      PWM = PIDspd(velocity);
       objDetect = false;
+
+      //call PID controllers depending on distance from an object
+      if ( distance > (followDist+15) ) {
+        PWM = PIDspd();
+      } else {
+        PWM = PIDflw();
+      }
+
+      //basic movement and line following logic
       if (digitalRead(LEYE) != line && digitalRead(REYE) != line) {
         forward();
       }
@@ -122,7 +139,6 @@ void loop() {
     }
 
   } else {
-
     //stop for when the buggy is told to stop
     stop();
     //stop counter for the Integral to prevent total error issues?
@@ -130,14 +146,35 @@ void loop() {
   }
 }
 
+//PID controllers
 //PID for speed control
-int PIDspd(int input) {
+int PIDspd() {
   //setsup current and elapsed time
   PIDtc = millis();
   PIDte = PIDtc - PIDtp;
 
   //calculates p, i, and d, terms
-  p_error = setpoint - input;
+  p_error = setpoint - velocity;
+  i_error += p_error * PIDte;
+  d_error = (p_error - l_error) / PIDte;
+
+  //calculates output
+  output = kp * p_error + ki * i_error + kd * d_error;
+
+  //sets previous variables
+  l_error = p_error;
+  PIDtp = PIDtc;
+
+  return output;
+}
+//PID for speed control
+int PIDflw() {
+  //setsup current and elapsed time
+  PIDtc = millis();
+  PIDte = PIDtc - PIDtp;
+
+  //calculates p, i, and d, terms
+  p_error = setpoint - distance;
   i_error += p_error * PIDte;
   d_error = (p_error - l_error) / PIDte;
 
@@ -164,8 +201,8 @@ void wifiPoll() {
   //reads for start 'x' and stop 'y' signals wirelessly
   //uses bool variables to have a constant on or off signal
   if (client.available()) {
-    reader = client.read();  //PROBLEM LINE
-    //Serial.println(reader);
+    reader = client.read();
+    //Serial.println(reader); //DEBUG
   }
   if (reader == 'x') {
     run = true;
