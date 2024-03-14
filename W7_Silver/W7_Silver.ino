@@ -1,9 +1,10 @@
 //TODO:
 /*
+DEBUG and test PID(and tune PIDfollow)
 silver challenge reporting:
-report distance to object
-speed of buggy
-PID contorl mode
+report distance to object. TO DEBUG
+speed of buggy. TO DEBUG
+PID contorl mode. TO DEBUG
 and also the reference speed for some reason?
 */
 
@@ -40,24 +41,25 @@ float velocity;            // output variable for motor velocity
 char reader;    //input variable for reading a charcter over WiFi
 String report;  //temporary holder for reports before converting to char and wireless send
 //PID variables
-int setpoint = 30;                            //starting setpoint for velocity in cm/s
-float output;                                 //variables for PID output
-const float kp = .01, ki = .0005, kd = .001;  //PID gains for proportional, integral, and derivative
-//!!!UNSURE!!! do we need to get new variables and retune for following PID?
+int setpoint = 30;                                  //starting setpoint for velocity in cm/s
+float output;                                       //variables for PID output
+const float kp_s = .01, ki_s = .0005, kd_s = .001;  //PIDspd gains for proportional, integral, and derivative
+const float kp_f = .01, ki_f = .0005, kd_f = .001;  //PIDflw gains for proportional, integral, and derivative
 
 //initialising other global variables, !!!RECCOMEND DO NOT TOUCH!!!
 bool firstConnect = true;  //variable for the first wifi connection to the client
 //variabls for keeping the arduino running or paused as well as object detection
-bool run = false, objDetect = false;
+bool run = false, objFollow = false, objDetect = false;
 //variabls for wheel encoder
 volatile int lencoder = 0, rencoder = 0;
 int travelDist = 0, travelDistP = 0;  //tracking distance traveled in cm
 //report timers
-unsigned long repTime = 0, repTimep1 = 0, repTimep2;
+unsigned long repTime = 0, repTimep1 = 0, repTimep2 = 0;
 //tracking time for current, previous, and elapsed times
 unsigned long PIDtc = 0, PIDtp = 0, PIDte;
 //errors for proportional, integral, derivitate, and last proportional
-double p_error = 0, i_error = 0, d_error = 0, l_error = 0;
+double s_perror = 0, s_ierror = 0, s_derror = 0, s_lerror = 0;
+double f_perror = 0, f_ierror = 0, f_derror = 0, f_lerror = 0;
 
 
 void setup() {
@@ -98,11 +100,8 @@ void loop() {
   //calls WiFi events
   wifiPoll();
 
-  //keep here or  move to seperate function?
-  //general calculations for traveldistance and velocity used for PID and reporting
+  //general calculations for traveldistance
   travelDist = ((lencoder + rencoder) / (float)(2 * hallc)) * (wheeld * 3.1415);
-  velocity = (travelDist - travelDistP) / (float)(PIDte / 1000.0);
-  travelDistP = travelDist;
   //Serial.println(velocity); //DEBUG
 
   //general run loop handling movement, distance polling, and line detection
@@ -113,11 +112,17 @@ void loop() {
     if (distance > stopDist && distance != 0) {
       objDetect = false;
 
+      //moved here to prevent velocity error
+      //calculations for velocity
+      velocity = (travelDist - travelDistP) / (float)(PIDte / 1000.0);
+      travelDistP = travelDist;
       //call PID controllers depending on distance from an object
-      if ( distance > (followDist+15) ) {
+      if (distance > (followDist + 15)) {
         PWM = PIDspd();
+        objFollow = false;
       } else {
         PWM = PIDflw();
+        objFollow = true;
       }
 
       //basic movement and line following logic
@@ -132,8 +137,9 @@ void loop() {
       }
     } else {
       //stop for when an object is detected
-      objDetect = true;
       stop();
+      objDetect = true;
+      velocity = 0;
       //stop counter for the Integral to prevent total error issues?
       PIDtp = millis();
     }
@@ -141,6 +147,7 @@ void loop() {
   } else {
     //stop for when the buggy is told to stop
     stop();
+    velocity = 0;
     //stop counter for the Integral to prevent total error issues?
     PIDtp = millis();
   }
@@ -154,15 +161,15 @@ int PIDspd() {
   PIDte = PIDtc - PIDtp;
 
   //calculates p, i, and d, terms
-  p_error = setpoint - velocity;
-  i_error += p_error * PIDte;
-  d_error = (p_error - l_error) / PIDte;
+  s_perror = setpoint - velocity;
+  s_ierror += s_perror * PIDte;
+  s_derror = (s_perror - s_lerror) / PIDte;
 
   //calculates output
-  output = kp * p_error + ki * i_error + kd * d_error;
+  output = kp_s * s_perror + ki_s * s_ierror + kd_s * s_derror;
 
   //sets previous variables
-  l_error = p_error;
+  s_lerror = s_perror;
   PIDtp = PIDtc;
 
   return output;
@@ -174,15 +181,15 @@ int PIDflw() {
   PIDte = PIDtc - PIDtp;
 
   //calculates p, i, and d, terms
-  p_error = setpoint - distance;
-  i_error += p_error * PIDte;
-  d_error = (p_error - l_error) / PIDte;
+  f_perror = followDist - distance;
+  f_ierror += f_perror * PIDte;
+  f_derror = (f_perror - f_lerror) / PIDte;
 
   //calculates output
-  output = kp * p_error + ki * i_error + kd * d_error;
+  output = kp_f * f_perror + ki_f * f_ierror + kd_f * f_derror;
 
   //sets previous variables
-  l_error = p_error;
+  f_lerror = f_perror;
   PIDtp = PIDtc;
 
   return output;
@@ -215,12 +222,20 @@ void wifiPoll() {
   //reporting and timer for distance travelled and object detection
   repTime = millis();
   if (repTime - repTimep1 > 5000 && !objDetect) {
-    //report for only distance traveled
-    report = String(travelDist) + " cm traveled. ";
+    //create report based on boolean factors
+    report = "Travelled: " + String(travelDist) + " cm\n";
+    report = report + "Speed: " + String(velocity) + " cm/s\n";
+    if (objFollow) {
+      report = report + "Mode: Follow Object\n";
+      report = report + "Clearence: " + String(travelDist) + " cm\n";
+    } else if (!objFollow) {
+      report = report + "Mode: Maintain Speed\n";
+    }
+    //send report
     client.write(report.c_str());
     //resets timer
     repTimep1 = millis();
-  } else if (repTime - repTimep1 > 5000 && objDetect) {
+  } else if (repTime - repTimep2 > 5000 && objDetect) {
     //report for only distance traveled AND object detected
     client.write("object detected!");
     //resets both timers to prevent over reporting
