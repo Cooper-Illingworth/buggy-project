@@ -40,8 +40,9 @@ float velocity;            // output variable for motor velocity
 //WiFi variables
 char reader;    //input variable for reading a charcter over WiFi
 String report;  //temporary holder for reports before converting to char and wireless send
+int reportFreq = 1000;
 //PID variables
-int setpoint = 30;                                  //starting setpoint for velocity in cm/s
+int setpoint = 10;                                  //starting setpoint for velocity in cm/s
 float output;                                       //variables for PID output
 const float kp_s = .01, ki_s = .0005, kd_s = .001;  //PIDspd gains for proportional, integral, and derivative
 const float kp_f = .01, ki_f = .0005, kd_f = .001;  //PIDflw gains for proportional, integral, and derivative
@@ -92,6 +93,7 @@ void setup() {
   server.begin();
 }
 
+
 void loop() {
   //basic delay for timing vital actions: wifi, movement, etc.
   //anything needing a longer delay should be done with a timer to keep vital actions fast
@@ -99,10 +101,6 @@ void loop() {
 
   //calls WiFi events
   wifiPoll();
-
-  //general calculations for traveldistance
-  travelDist = ((lencoder + rencoder) / (float)(2 * hallc)) * (wheeld * 3.1415);
-  //Serial.println(velocity); //DEBUG
 
   //general run loop handling movement, distance polling, and line detection
   if (run) {
@@ -113,11 +111,14 @@ void loop() {
       objDetect = false;
 
       //moved here to prevent velocity error
-      //calculations for velocity
+      //general calculations for traveldistance and velocity
+      travelDist = ((lencoder + rencoder) / (float)(2 * hallc)) * (wheeld * 3.1415);
       velocity = (travelDist - travelDistP) / (float)(PIDte / 1000.0);
       travelDistP = travelDist;
+      //Serial.println(velocity); //DEBUG
+
       //call PID controllers depending on distance from an object
-      if (distance > (followDist + 15)) {
+      if (distance < (followDist + 15)) {
         PWM = PIDspd();
         objFollow = false;
       } else {
@@ -139,6 +140,7 @@ void loop() {
       //stop for when an object is detected
       stop();
       objDetect = true;
+      objFollow = false;
       velocity = 0;
       //stop counter for the Integral to prevent total error issues?
       PIDtp = millis();
@@ -152,6 +154,7 @@ void loop() {
     PIDtp = millis();
   }
 }
+
 
 //PID controllers
 //PID for speed control
@@ -221,27 +224,47 @@ void wifiPoll() {
 
   //reporting and timer for distance travelled and object detection
   repTime = millis();
-  if (repTime - repTimep1 > 5000 && !objDetect) {
-    //create report based on boolean factors
-    report = "Travelled: " + String(travelDist) + " cm\n";
-    report = report + "Speed: " + String(velocity) + " cm/s\n";
-    if (objFollow) {
-      report = report + "Mode: Follow Object\n";
-      report = report + "Clearence: " + String(travelDist) + " cm\n";
-    } else if (!objFollow) {
-      report = report + "Mode: Maintain Speed\n";
+  if (repTime - repTimep1 > reportFreq) {
+    //create custom report based on boolean factors
+
+    //reports the mode the buggy is currently in
+    //uses short codes for effeciency
+    if (run && objFollow) {
+      //follow object and clearence from object
+      report = "m:f";
+      report = report + "c:" + String(distance) + ":c";
+    } else if (run && !objFollow && !objDetect) {
+      //maintain speed
+      report = "m:c";
+    } else if (run && objDetect) {
+      //pause for object
+      report = "m:p";
+      report = report + "c:" + String(distance) + ":c";
+    } else if (!run) {
+      //stopped
+      report = "m:s";
     }
+
+    //reports the speed and distance travelled by the buggy
+    report = report + "v:" + String(velocity) + ":v";
+    report = report + "t:" + String(travelDist) + ":t";
+
     //send report
     client.write(report.c_str());
+
     //resets timer
     repTimep1 = millis();
-  } else if (repTime - repTimep2 > 5000 && objDetect) {
+  }
+  //!!!CAUTION!!! might not be nesesary because of the GUI data which reports more often, if it is needed add "&& !objDetect" back to previous if statement
+  /*
+  else if (repTime - repTimep2 > reportFreq && objDetect) {
     //report for only distance traveled AND object detected
-    client.write("object detected!");
+    client.write("Mode: Halt");
     //resets both timers to prevent over reporting
     repTimep1 = millis();
     repTimep2 = millis();
   }
+  */
 }
 //function for polling distance using the ultrasonic sensor
 void distPoll() {
