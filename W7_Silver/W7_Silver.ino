@@ -42,10 +42,10 @@ char reader;    //input variable for reading a charcter over WiFi
 String report;  //temporary holder for reports before converting to char and wireless send
 int reportFreq = 1000;
 //PID variables
-int setpoint = 10;                                  //starting setpoint for velocity in cm/s
+int setpoint = 15;                                  //starting setpoint for velocity in cm/s
 float output;                                       //variables for PID output
-const float kp_s = .01, ki_s = .0005, kd_s = .001;  //PIDspd gains for proportional, integral, and derivative
-const float kp_f = .01, ki_f = .0005, kd_f = .001;  //PIDflw gains for proportional, integral, and derivative
+const float kp_s = .08, ki_s = .002, kd_s = .002;  //PIDspd gains for proportional, integral, and derivative
+const float kp_f = .002, ki_f = .004, kd_f = .08;  //PIDflw gains for proportional, integral, and derivative
 
 //initialising other global variables, !!!RECCOMEND DO NOT TOUCH!!!
 bool firstConnect = true;  //variable for the first wifi connection to the client
@@ -115,14 +115,14 @@ void loop() {
       travelDist = ((lencoder + rencoder) / (float)(2 * hallc)) * (wheeld * 3.1415);
       velocity = (travelDist - travelDistP) / (float)(PIDte / 1000.0);
       travelDistP = travelDist;
-      //Serial.println(velocity); //DEBUG
+      //Serial.println(velocity);  //DEBUG
 
       //call PID controllers depending on distance from an object
-      if (distance < (followDist + 15)) {
-        PWM = PIDspd();
+      if (distance > (followDist + 15) || distance == 0) {
+        PWM = PIDspd(velocity);
         objFollow = false;
-      } else {
-        PWM = PIDflw();
+      } else if (distance <= (followDist + 15) && distance != 0) {
+        PWM = PIDflw(distance);
         objFollow = true;
       }
 
@@ -158,13 +158,13 @@ void loop() {
 
 //PID controllers
 //PID for speed control
-int PIDspd() {
+int PIDspd(int input) {
   //setsup current and elapsed time
   PIDtc = millis();
   PIDte = PIDtc - PIDtp;
 
   //calculates p, i, and d, terms
-  s_perror = setpoint - velocity;
+  s_perror = setpoint - input;
   s_ierror += s_perror * PIDte;
   s_derror = (s_perror - s_lerror) / PIDte;
 
@@ -178,14 +178,15 @@ int PIDspd() {
   return output;
 }
 //PID for speed control
-int PIDflw() {
+int PIDflw(int input) {
   //setsup current and elapsed time
   PIDtc = millis();
   PIDte = PIDtc - PIDtp;
 
   //calculates p, i, and d, terms
-  f_perror = followDist - distance;
+  f_perror = -(followDist - input);
   f_ierror += f_perror * PIDte;
+  if (f_perror < 0) f_ierror = 0; 
   f_derror = (f_perror - f_lerror) / PIDte;
 
   //calculates output
@@ -194,6 +195,7 @@ int PIDflw() {
   //sets previous variables
   f_lerror = f_perror;
   PIDtp = PIDtc;
+  Serial.println(output);
 
   return output;
 }
@@ -232,14 +234,14 @@ void wifiPoll() {
     if (run && objFollow) {
       //follow object and clearence from object
       report = "m:f";
-      report = report + "c:" + String(distance) + ":c";
+      report = report + "d:" + String(distance) + ":d";
     } else if (run && !objFollow && !objDetect) {
       //maintain speed
       report = "m:c";
     } else if (run && objDetect) {
       //pause for object
       report = "m:p";
-      report = report + "c:" + String(distance) + ":c";
+      //report = report + "c:" + String(distance) + ":c";
     } else if (!run) {
       //stopped
       report = "m:s";

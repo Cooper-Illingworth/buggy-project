@@ -27,9 +27,9 @@ const bool line = LOW;
 const float wheeld = 6.5;  //diameter of the wheels
 const int hallc = 8;       //amount of state changes per encoder rotation
 //PID setpoint
-int setpoint = 30;  //starting velocity
+int setpoint = 15;  //starting velocity
 //PID gains
-const float kp = .01, ki = .0005, kd = .001; //UNSURE!!! do we need to get new variables and retune for following PID
+const float kp = .05, ki = .008, kd = .002; //UNSURE!!! do we need to get new variables and retune for following PID
 
 //initialising other global variables, reccomend do not change
 float velocity;
@@ -94,7 +94,7 @@ void loop() {
   //general calculations for traveldistance and velocity used for PID and reporting
   travelDist = ((lencoder + rencoder) / (float)(2 * hallc)) * (wheeld * 3.1415);
   velocity = (travelDist - travelDistP) / (float)(PIDte / 1000.0);
-  //Serial.println(velocity);
+  Serial.println(velocity);
   //Serial.println(travelDist - travelDistP);
   travelDistP = travelDist;
 
@@ -176,7 +176,7 @@ void wifiPoll() {
   repTime1c = millis();
   if (repTime1c - repTime1p > 5000) {
 
-    report = String(travelDist) + " cm traveled. ";
+    report = String(velocity) + "cm/s. ";
     client.write(report.c_str());
     if (objDetect) client.write("object detected!");
     //resets timer
