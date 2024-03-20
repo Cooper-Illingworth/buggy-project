@@ -1,13 +1,3 @@
-//TODO:
-/*
-DEBUG and test PID(and tune PIDfollow)
-silver challenge reporting:
-report distance to object. TO DEBUG
-speed of buggy. TO DEBUG
-PID contorl mode. TO DEBUG
-and also the reference speed for some reason?
-*/
-
 #include <WiFiS3.h>
 
 //wifi name and password
@@ -44,8 +34,8 @@ int reportFreq = 1000;
 //PID variables
 int setpoint = 15;                                  //starting setpoint for velocity in cm/s
 float output;                                       //variables for PID output
-const float kp_s = .08, ki_s = .002, kd_s = .002;  //PIDspd gains for proportional, integral, and derivative
-const float kp_f = .002, ki_f = .004, kd_f = .08;  //PIDflw gains for proportional, integral, and derivative
+const float kp_s = .08, ki_s = .0025, kd_s = .002;  //PIDspd gains for proportional, integral, and derivative
+const float kp_f = .0025, ki_f = .004, kd_f = .08;  //PIDflw gains for proportional, integral, and derivative
 
 //initialising other global variables, !!!RECCOMEND DO NOT TOUCH!!!
 bool firstConnect = true;  //variable for the first wifi connection to the client
@@ -214,13 +204,13 @@ void wifiPoll() {
   //uses bool variables to have a constant on or off signal
   if (client.available()) {
     reader = client.read();
-    //Serial.println(reader); //DEBUG
+    Serial.println(reader); //DEBUG
   }
   if (reader == 'x') {
     run = true;
   } else if (reader == 'y') {
     run = false;
-  } else if (reader <= 30 && reader >= 5) {
+  } else if (reader <= 35 && reader >= 5) {
     setpoint = reader;
   }
 
