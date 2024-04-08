@@ -9,7 +9,7 @@ WiFiServer server(5200);
 
 //Husky lens initialisation
 HUSKYLENS huskylens;
-SoftwareSerial mySerial(18, 19);
+//SoftwareSerial mySerial(18, 19);
 
 //pin initialisation
 //motor pins
@@ -63,7 +63,8 @@ int tagID;
 
 
 void setup() {
-  Serial.begin(9600);
+  //Serial.begin(9600);
+  Serial.begin(115200);
 
   //pin initialisation
   pinMode(RFpin, OUTPUT);
